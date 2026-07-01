@@ -1,1 +1,177 @@
-<!-- Even Partnerships Dashboard - placeholder, replaced by upload -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Even Partnerships Dashboard</title>
+<style>
+  :root{--navy:#1F3864;--teal:#2E7D6F;--light:#EAF1F5;--amber:#FFF2CC;--ink:#1a2233;--muted:#6b7688;}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;color:var(--ink);background:#f5f7fa}
+  header{background:linear-gradient(120deg,var(--navy),var(--teal));color:#fff;padding:22px 28px}
+  header h1{margin:0;font-size:22px}
+  header p{margin:4px 0 0;opacity:.85;font-size:13px}
+  .wrap{max-width:1280px;margin:0 auto;padding:20px 24px 60px}
+  .cards{display:flex;flex-wrap:wrap;gap:12px;margin:18px 0}
+  .card{background:#fff;border-radius:12px;padding:14px 18px;min-width:120px;flex:1;box-shadow:0 1px 3px rgba(20,40,80,.08);border-top:3px solid var(--teal)}
+  .card .n{font-size:26px;font-weight:700;color:var(--navy)}
+  .card .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:14px 0}
+  .controls input,.controls select{padding:8px 10px;border:1px solid #d3dae4;border-radius:8px;font-size:13px;background:#fff}
+  .controls input[type=text]{min-width:220px}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(20,40,80,.08)}
+  th{background:var(--navy);color:#fff;font-size:11.5px;text-align:left;padding:10px 10px;position:sticky;top:0}
+  td{padding:9px 10px;border-bottom:1px solid #eef1f5;font-size:12.5px;vertical-align:top}
+  tr:hover td{background:#f8fbfd}
+  .seg{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:600;background:var(--light);color:var(--navy);white-space:nowrap}
+  .pri{font-weight:700;font-size:11px}
+  .pri.High{color:#0a7d3b}.pri.Medium{color:#b8860b}.pri.Low{color:#94a0b0}
+  a{color:#0563C1;text-decoration:none}a:hover{text-decoration:underline}
+  select.stage{border:none;border-radius:16px;padding:5px 8px;font-size:11.5px;font-weight:600;cursor:pointer;color:#333}
+  .email{cursor:pointer;color:var(--teal);font-size:11.5px}
+  .muted{color:var(--muted);font-style:italic}
+  .section{background:#fff;border-radius:12px;padding:6px 22px 18px;margin-top:26px;box-shadow:0 1px 3px rgba(20,40,80,.08)}
+  .section h2{color:var(--navy);font-size:16px}
+  details{border-bottom:1px solid #eef1f5;padding:10px 0}
+  summary{cursor:pointer;font-weight:600;color:var(--navy);font-size:13.5px}
+  pre{white-space:pre-wrap;background:var(--light);padding:12px 14px;border-radius:8px;font-family:inherit;font-size:12.5px;margin:10px 0 4px}
+  .copy{background:var(--teal);color:#fff;border:none;padding:5px 12px;border-radius:6px;font-size:11.5px;cursor:pointer}
+  .pill{font-size:10.5px;color:var(--muted)}
+  .reset{background:none;border:1px solid #d3dae4;color:var(--muted);padding:8px 12px;border-radius:8px;font-size:12px;cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <h1>Even — Health Partnerships Dashboard</h1>
+  <p>Prospecting tracker for hospital &amp; diagnostics fulfilment partnerships. Statuses save automatically in this browser.</p>
+</header>
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search company, POC, title…">
+    <select id="fSeg"><option value="">All segments</option></select>
+    <select id="fPri"><option value="">All priorities</option><option>High</option><option>Medium</option><option>Low</option></select>
+    <select id="fStage"><option value="">All stages</option></select>
+    <button class="reset" onclick="resetAll()">Reset statuses</button>
+  </div>
+
+  <table id="tbl">
+    <thead><tr>
+      <th>Company</th><th>Segment</th><th>HQ</th><th>Funding</th>
+      <th>POC</th><th>Title</th><th>Location</th><th>LinkedIn</th><th>Email (to confirm)</th><th>Priority</th><th style="min-width:150px">Stage</th>
+    </tr></thead>
+    <tbody id="body"></tbody>
+  </table>
+
+  <div class="section">
+    <h2>Outreach Playbook</h2>
+    <p class="pill">The pitch: Even runs a pan-India hospital &amp; diagnostics network. Partners route users to us for X-rays, scans, lab tests &amp; day-care at a flat per-fulfilment fee (from ~Rs 100/person) — offline coverage, no infra to build. Personalise {First} / {Company} / {segment} each time.</p>
+    <p class="pill" style="background:#FFF2CC;padding:8px 12px;border-radius:8px;display:block">✉️ The email column is <b>intentionally blank</b> — we only add confirmed addresses. Find them via LinkedIn Contact info (1st-degree connections only) or Hunter.io / Apollo.io, then fill them in.</p>
+    <div id="templates"></div>
+  </div>
+</div>
+
+<script>
+const STAGES=["Not started","Connection sent","Message sent","Email sent","Revert received","Meeting scheduled","In discussion","Won","Not interested"];
+const STAGE_COLOR={"Not started":"#e6e9ee","Connection sent":"#fff2cc","Message sent":"#ffe49c","Email sent":"#ffd98a","Revert received":"#bdd7ee","Meeting scheduled":"#c6efce","In discussion":"#bdd7ee","Won":"#a9e5b8","Not interested":"#f8cbad"};
+
+const DATA=[
+ ["Orange Health Labs","Diagnostics & Labs","Bengaluru","Series B (~$50M)","Ayman Ahmed","Partnerships @ Orange Health Labs","Bengaluru","https://www.linkedin.com/in/aymansyed/","","High"],
+ ["Orange Health Labs","Diagnostics & Labs","Bengaluru","Series B (~$50M)","Nipun Gupta","Associate Director - Partnerships","Delhi NCR","https://www.linkedin.com/in/nipun-gupta-07a462b3/","","High"],
+ ["Redcliffe Labs","Diagnostics & Labs","Noida (Delhi NCR)","Series B ($61M)","Shivam Gupta","Brand Partnership Executive","Delhi NCR","https://www.linkedin.com/in/shivamgupta30sg/","","Medium"],
+ ["Metropolis Healthcare","Diagnostics & Labs","Mumbai (pan-India)","Listed","Saurabh Sonar","Corporate Sales / Strategic Partnerships","Mumbai","https://www.linkedin.com/in/saurabh-sonar-72a1b822/","","Medium"],
+ ["Thyrocare (PharmEasy)","Diagnostics & Labs","Navi Mumbai / Bengaluru","Part of PharmEasy","Piyush Singh","Vice President at Thyrocare","Bengaluru","https://www.linkedin.com/in/piyushsingh16/","","High"],
+ ["Healthians","Diagnostics & Labs","Gurugram","Series C","Vishal Bhardwaj","Senior Manager - Corporate Sales","Gurugram","https://www.linkedin.com/in/vishal-bhardwaj-b11771231/","","Medium"],
+ ["5C Network","Diagnostics / Radiology","Bengaluru","Series A","Puja Kalita","Regional Sales Manager @ 5C Network","Bengaluru","https://www.linkedin.com/in/puja-kalita-36372516b/","","Medium"],
+ ["Tata 1mg","Pharmacy & ePharmacy","Gurugram (Tata Digital)","Tata-owned","Priyansh Agarwal","AVP - D2C Brand","Delhi NCR","https://www.linkedin.com/in/priyansh-agarwal-772630107/","","High"],
+ ["Tata 1mg","Pharmacy & ePharmacy","Gurugram (Tata Digital)","Tata-owned","Himanshu Ratra","Brand Partnerships / Key Accounts","Gurugram","https://www.linkedin.com/in/himanshu-ratra-3b724714a/","","Medium"],
+ ["Truemeds","Pharmacy & ePharmacy","Mumbai (Bengaluru hub)","Series C ($114M)","Vimalpreet Kaur Bajwa","Director - Key Accounts & Partnerships","Mumbai","https://www.linkedin.com/in/vimalpreet-kaur-bajwa-1316ba18/","","High"],
+ ["MediBuddy","Pharmacy / Integrated care","Bengaluru","Series C ($125M)","Chetan Neswankar","Director - Strategic Partnerships","Mumbai","https://www.linkedin.com/in/chetan-neswankar-28607542/","","High"],
+ ["MediBuddy","Pharmacy / Integrated care","Bengaluru","Series C ($125M)","Lavanya Veluru","Brand Marketing & Strategic Partnerships","Bengaluru","https://www.linkedin.com/in/lavanya-veluru-765219218/","","High"],
+ ["Clinikk","Primary Care & Clinics","Bengaluru","Series A (~$10M)","Sumit Saini","AVP - Alliance & Partnerships","Gurugram","https://www.linkedin.com/in/sumit-saini-59185193/","","High"],
+ ["ekincare","Primary Care / Corp Health","Hyderabad","Series C","Althaf Moideen","Partnerships & Growth (verify employer)","Bengaluru","https://www.linkedin.com/in/althaf-moideen/","","Medium"],
+ ["Practo","Primary Care / Teleconsult","Bengaluru","Late stage ($232M)","","(POC to be identified)","","","","Medium"],
+ ["HealthPlix","Primary Care / EMR","Bengaluru","Series C ($23M)","","(POC to be identified)","","","","Low"],
+ ["Plum","Insurtech / Health Benefits","Bengaluru","Series B","Diya Patel","Partnerships at Plum","Bengaluru","https://www.linkedin.com/in/diya-patel-2743481aa/","","High"],
+ ["Onsurity","Insurtech / Health Benefits","Bengaluru","~$72M raised","Varun Tandon","Head of Partnerships","Mumbai","https://www.linkedin.com/in/varun-tandon-74097021/","","High"],
+ ["Onsurity","Insurtech / Health Benefits","Bengaluru","~$72M raised","Ashwin Gupta","Operations & Partnerships","Bengaluru","https://www.linkedin.com/in/ashwin-gupta-393393193/","","Medium"],
+ ["Onsurity","Insurtech / Health Benefits","Bengaluru","~$72M raised","Bheru Jain","Associate Director - Strategic Partnerships & Alliances","Bengaluru","https://www.linkedin.com/in/bheru-jain-95b214105/","","High"],
+ ["Nova Benefits","Insurtech / Health Benefits","Bengaluru","Series A","Noor Alam","GM - Sales & Retention","Bengaluru","https://www.linkedin.com/in/nooralam1405/","","Medium"],
+ ["Kenko Health","Insurtech / OPD plans","Mumbai","Series A ($12M)","","(verify — reportedly wound down)","","","","Low"],
+ ["Portea Medical","Home Healthcare","Bengaluru","Late stage","","(POC to be identified)","","","","Medium"],
+ ["mfine","Teleconsult / Integrated","Bengaluru","Series C","","(POC to be identified)","","","","Low"]
+];
+const COLS=["company","segment","hq","funding","poc","title","loc","linkedin","email","priority"];
+DATA.forEach(r=>{r[8]="";}); // email left blank until confirmed
+const rows=DATA.map((r,i)=>{const o={id:i};COLS.forEach((c,j)=>o[c]=r[j]);return o;});
+
+const store=JSON.parse(localStorage.getItem("even_stage")||"{}");
+function saveStage(id,v){store[id]=v;localStorage.setItem("even_stage",JSON.stringify(store));render();}
+function stageOf(id){return store[id]||"Not started";}
+
+const TEMPLATES=[
+ ["LinkedIn connection note (<300 chars)","Hi {First}, I'm with Even. We run a pan-India hospital & diagnostics network. If {Company} needs to fulfil in-person care for users — X-rays, scans, lab tests — you can route them to our hospitals at a flat per-service rate, no infra to build. Worth a quick chat?"],
+ ["LinkedIn message / InMail","Hi {First}, thanks for connecting. I lead partnerships at Even. We operate a hospital and diagnostics network across India and help healthtech companies like {Company} deliver the offline side of care — imaging, lab tests, day-care procedures — without owning the infrastructure. You route users to Even and pay a flat per-fulfilment fee (from ~Rs 100/person). Given {Company}'s footprint in {segment}, feels like a strong fit. Open to 20 mins this week or next?"],
+ ["Cold email","Subject: {Company} x Even — instant offline coverage for your users\n\nHi {First},\n\nI'm Vani from Even. We operate a hospital and diagnostics network across India, and we help healthtech companies fulfil the in-person side of care — X-rays, imaging, lab tests, day-care procedures — without building the infrastructure themselves.\n\nThe setup is simple: when your users need a physical service, you route them to Even's network and pay a flat per-fulfilment fee (as low as Rs 100 per person). You get reliable, quality offline coverage across cities; we handle delivery.\n\nGiven {Company}'s reach in {segment}, this could let you expand service coverage instantly. Could we grab 20 minutes this week?\n\nBest,\nVani\nEven | vani@even.in"],
+ ["Follow-up (no reply in 4-5 days)","Hi {First}, floating this back up. Even can give {Company} instant offline fulfilment (imaging, labs, day-care) across India at a flat per-service fee. Happy to share a one-pager or do a quick 15-min call — whichever is easier. Would this week work?"]
+];
+
+// populate filter selects
+const segs=[...new Set(rows.map(r=>r.segment))].sort();
+segs.forEach(s=>fSeg.insertAdjacentHTML("beforeend",`<option>${s}</option>`));
+STAGES.forEach(s=>fStage.insertAdjacentHTML("beforeend",`<option>${s}</option>`));
+
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+function render(){
+  const q=search.value.toLowerCase(),fs=fSeg.value,fp=fPri.value,fst=fStage.value;
+  const body=document.getElementById("body");body.innerHTML="";
+  let shown=rows.filter(r=>{
+    const st=stageOf(r.id);
+    if(fs&&r.segment!==fs)return false;
+    if(fp&&r.priority!==fp)return false;
+    if(fst&&st!==fst)return false;
+    if(q&&!(r.company+r.poc+r.title+r.segment).toLowerCase().includes(q))return false;
+    return true;
+  });
+  shown.forEach(r=>{
+    const st=stageOf(r.id);
+    const opts=STAGES.map(s=>`<option ${s===st?"selected":""}>${s}</option>`).join("");
+    const li=r.linkedin?`<a href="${r.linkedin}" target="_blank">Profile ↗</a>`:'<span class="muted">—</span>';
+    const em=r.email?`<span class="email" title="Guess — verify. Click to copy" onclick="navigator.clipboard.writeText('${r.email}')">${r.email}</span>`:'<span class="muted">—</span>';
+    const poc=r.poc?esc(r.poc):'<span class="muted">find POC</span>';
+    body.insertAdjacentHTML("beforeend",`<tr>
+      <td><b>${esc(r.company)}</b></td>
+      <td><span class="seg">${esc(r.segment)}</span></td>
+      <td>${esc(r.hq)}</td><td>${esc(r.funding)}</td>
+      <td>${poc}</td><td>${esc(r.title)}</td><td>${esc(r.loc)||'—'}</td>
+      <td>${li}</td><td>${em}</td>
+      <td class="pri ${r.priority}">${r.priority||''}</td>
+      <td><select class="stage" style="background:${STAGE_COLOR[st]}" onchange="saveStage(${r.id},this.value)">${opts}</select></td>
+    </tr>`);
+  });
+  renderCards();
+}
+function renderCards(){
+  const counts={};STAGES.forEach(s=>counts[s]=0);
+  rows.forEach(r=>counts[stageOf(r.id)]++);
+  const companies=new Set(rows.map(r=>r.company)).size;
+  const pocs=rows.filter(r=>r.linkedin).length;
+  const active=rows.length-counts["Not started"];
+  const cards=[["Companies",companies],["POCs identified",pocs],["Reached out",active],
+    ["Reverts",counts["Revert received"]],["Meetings",counts["Meeting scheduled"]],["Won",counts["Won"]]];
+  document.getElementById("cards").innerHTML=cards.map(c=>`<div class="card"><div class="n">${c[1]}</div><div class="l">${c[0]}</div></div>`).join("");
+}
+function resetAll(){if(confirm("Clear all saved statuses?")){localStorage.removeItem("even_stage");for(const k in store)delete store[k];render();}}
+[search,fSeg,fPri,fStage].forEach(el=>el.addEventListener("input",render));
+
+document.getElementById("templates").innerHTML=TEMPLATES.map((t,i)=>`
+  <details ${i===0?"open":""}><summary>${t[0]}</summary>
+  <pre id="tpl${i}">${esc(t[1])}</pre>
+  <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('tpl${i}').innerText)">Copy</button>
+  </details>`).join("");
+
+render();
+</script>
+</body>
+</html>
