@@ -29,8 +29,8 @@
   .pri{font-weight:700;font-size:11px}
   .pri.High{color:#0a7d3b}.pri.Medium{color:#b8860b}.pri.Low{color:#94a0b0}
   a{color:#0563C1;text-decoration:none}a:hover{text-decoration:underline}
-  select.stage{border:none;border-radius:16px;padding:5px 8px;font-size:11.5px;font-weight:600;cursor:pointer;color:#333}
-  .email{cursor:pointer;color:var(--teal);font-size:11.5px}
+  .badge{display:inline-block;padding:5px 10px;border-radius:16px;font-size:11.5px;font-weight:600;color:#333;white-space:nowrap}
+  .email{font-size:11.5px;color:var(--teal)}
   .muted{color:var(--muted);font-style:italic}
   .section{background:#fff;border-radius:12px;padding:6px 22px 18px;margin-top:26px;box-shadow:0 1px 3px rgba(20,40,80,.08)}
   .section h2{color:var(--navy);font-size:16px}
@@ -45,8 +45,8 @@
 <body>
 <header>
   <h1>Even — Health Partnerships Dashboard</h1>
-  <p>Prospecting tracker for hospital &amp; diagnostics fulfilment partnerships. Statuses save automatically in this browser.</p>
-  <p class="updated" id="lastUpdated"><span class="dot">●</span> Last updated: —</p>
+  <p>Live view of the partnerships pipeline, synced from the team Google Sheet.</p>
+  <p class="updated" id="lastUpdated"><span class="dot">●</span> Loading…</p>
 </header>
 <div class="wrap">
   <div class="cards" id="cards"></div>
@@ -56,13 +56,13 @@
     <select id="fSeg"><option value="">All segments</option></select>
     <select id="fPri"><option value="">All priorities</option><option>High</option><option>Medium</option><option>Low</option></select>
     <select id="fStage"><option value="">All stages</option></select>
-    <button class="reset" onclick="resetAll()">Reset statuses</button>
+    <button class="reset" onclick="load()">↻ Refresh now</button>
   </div>
 
   <table id="tbl">
     <thead><tr>
       <th>Company</th><th>Segment</th><th>HQ</th><th>Funding</th>
-      <th>POC</th><th>Title</th><th>Location</th><th>LinkedIn</th><th>Email (to confirm)</th><th>Priority</th><th style="min-width:150px">Stage</th>
+      <th>POC</th><th>Title</th><th>Location</th><th>LinkedIn</th><th>Email</th><th>Priority</th><th style="min-width:150px">Stage</th>
     </tr></thead>
     <tbody id="body"></tbody>
   </table>
@@ -70,7 +70,6 @@
   <div class="section">
     <h2>Outreach Playbook</h2>
     <p class="pill">The pitch: Even runs a pan-India hospital &amp; diagnostics network. Partners route users to us for X-rays, scans, lab tests &amp; day-care at a flat per-fulfilment fee (from ~Rs 100/person) — offline coverage, no infra to build. Personalise {First} / {Company} / {segment} each time.</p>
-    <p class="pill" style="background:#FFF2CC;padding:8px 12px;border-radius:8px;display:block">✉️ The email column is <b>intentionally blank</b> — we only add confirmed addresses. Find them via LinkedIn Contact info (1st-degree connections only) or Hunter.io / Apollo.io, then fill them in.</p>
     <div id="templates"></div>
   </div>
 </div>
@@ -78,8 +77,11 @@
 <script>
 const STAGES=["Not started","Connection sent","Message sent","Email sent","Revert received","Meeting scheduled","In discussion","Won","Not interested"];
 const STAGE_COLOR={"Not started":"#e6e9ee","Connection sent":"#fff2cc","Message sent":"#ffe49c","Email sent":"#ffd98a","Revert received":"#bdd7ee","Meeting scheduled":"#c6efce","In discussion":"#bdd7ee","Won":"#a9e5b8","Not interested":"#f8cbad"};
+const CSV_URL="https://docs.google.com/spreadsheets/d/e/2PACX-1vSAc0wongfEVgyNWNt0HWnmy7FnmozrwVU1C7HGuEJSM1aqPKgoQgTF5X8y1gionRxUeBkxbLt2l4Vx/pub?gid=994888042&single=true&output=csv";
+let rows=[];
 
-const DATA=[
+// Fallback snapshot — used only if the live sheet fetch fails
+const FALLBACK=[
  ["Orange Health Labs","Diagnostics & Labs","Bengaluru","Series B (~$50M)","Ayman Ahmed","Partnerships @ Orange Health Labs","Bengaluru","https://www.linkedin.com/in/aymansyed/","","High"],
  ["Orange Health Labs","Diagnostics & Labs","Bengaluru","Series B (~$50M)","Nipun Gupta","Associate Director - Partnerships","Delhi NCR","https://www.linkedin.com/in/nipun-gupta-07a462b3/","","High"],
  ["Redcliffe Labs","Diagnostics & Labs","Noida (Delhi NCR)","Series B ($61M)","Shivam Gupta","Brand Partnership Executive","Delhi NCR","https://www.linkedin.com/in/shivamgupta30sg/","","Medium"],
@@ -105,13 +107,6 @@ const DATA=[
  ["Portea Medical","Home Healthcare","Bengaluru","Late stage","","(POC to be identified)","","","","Medium"],
  ["mfine","Teleconsult / Integrated","Bengaluru","Series C","","(POC to be identified)","","","","Low"]
 ];
-const COLS=["company","segment","hq","funding","poc","title","loc","linkedin","email","priority"];
-DATA.forEach(r=>{r[8]="";}); // email left blank until confirmed
-const rows=DATA.map((r,i)=>{const o={id:i};COLS.forEach((c,j)=>o[c]=r[j]);return o;});
-
-const store=JSON.parse(localStorage.getItem("even_stage")||"{}");
-function saveStage(id,v){store[id]=v;localStorage.setItem("even_stage",JSON.stringify(store));render();}
-function stageOf(id){return store[id]||"Not started";}
 
 const TEMPLATES=[
  ["LinkedIn connection note (<300 chars)","Hi {First}, I'm with Even. We run a pan-India hospital & diagnostics network. If {Company} needs to fulfil in-person care for users — X-rays, scans, lab tests — you can route them to our hospitals at a flat per-service rate, no infra to build. Worth a quick chat?"],
@@ -120,28 +115,62 @@ const TEMPLATES=[
  ["Follow-up (no reply in 4-5 days)","Hi {First}, floating this back up. Even can give {Company} instant offline fulfilment (imaging, labs, day-care) across India at a flat per-service fee. Happy to share a one-pager or do a quick 15-min call — whichever is easier. Would this week work?"]
 ];
 
-// populate filter selects
-const segs=[...new Set(rows.map(r=>r.segment))].sort();
-segs.forEach(s=>fSeg.insertAdjacentHTML("beforeend",`<option>${s}</option>`));
-STAGES.forEach(s=>fStage.insertAdjacentHTML("beforeend",`<option>${s}</option>`));
-
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;")}
+
+function parseCSV(text){
+  const out=[];let i=0,f="",row=[],q=false;
+  while(i<text.length){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i+=2;continue;}q=false;i++;continue;}f+=c;i++;continue;}
+    if(c==='"'){q=true;i++;continue;}
+    if(c===','){row.push(f);f="";i++;continue;}
+    if(c==='\n'){row.push(f);out.push(row);row=[];f="";i++;continue;}
+    if(c==='\r'){i++;continue;}
+    f+=c;i++;
+  }
+  if(f.length||row.length){row.push(f);out.push(row);}
+  return out;
+}
+function rowsFromCSV(text){
+  const arr=parseCSV(text).filter(r=>r.length>1);
+  if(arr.length<2)return[];
+  const hdr=arr[0].map(h=>h.trim().toLowerCase());
+  const idx=n=>hdr.findIndex(h=>h.startsWith(n));
+  const iC=idx("company"),iSeg=idx("segment"),iHQ=idx("hq"),iFund=idx("funding"),
+    iPoc=idx("poc name"),iTitle=idx("title"),iLink=idx("linkedin"),iLoc=idx("poc location"),
+    iEmail=idx("email"),iPri=idx("priority"),iStage=idx("stage");
+  const res=[];
+  for(let k=1;k<arr.length;k++){const r=arr[k];
+    if(!((r[iC]||"").trim()))continue;
+    res.push({company:(r[iC]||"").trim(),segment:(r[iSeg]||"").trim(),hq:(r[iHQ]||"").trim(),funding:(r[iFund]||"").trim(),
+      poc:(r[iPoc]||"").trim(),title:(r[iTitle]||"").trim(),linkedin:(r[iLink]||"").trim(),loc:(r[iLoc]||"").trim(),
+      email:(r[iEmail]||"").trim(),priority:(r[iPri]||"").trim(),stage:((r[iStage]||"").trim()||"Not started")});
+  }
+  return res;
+}
+function fallbackRows(){
+  const C=["company","segment","hq","funding","poc","title","loc","linkedin","email","priority"];
+  return FALLBACK.map(a=>{const o={};C.forEach((c,j)=>o[c]=a[j]);o.email="";o.stage="Not started";return o;});
+}
+function populateFilters(){
+  while(fSeg.options.length>1)fSeg.remove(1);
+  while(fStage.options.length>1)fStage.remove(1);
+  [...new Set(rows.map(r=>r.segment))].filter(Boolean).sort().forEach(s=>fSeg.insertAdjacentHTML("beforeend",`<option>${esc(s)}</option>`));
+  STAGES.forEach(s=>fStage.insertAdjacentHTML("beforeend",`<option>${s}</option>`));
+}
 function render(){
   const q=search.value.toLowerCase(),fs=fSeg.value,fp=fPri.value,fst=fStage.value;
   const body=document.getElementById("body");body.innerHTML="";
-  let shown=rows.filter(r=>{
-    const st=stageOf(r.id);
+  rows.filter(r=>{
+    const st=r.stage||"Not started";
     if(fs&&r.segment!==fs)return false;
     if(fp&&r.priority!==fp)return false;
     if(fst&&st!==fst)return false;
-    if(q&&!(r.company+r.poc+r.title+r.segment).toLowerCase().includes(q))return false;
+    if(q&&!((r.company+r.poc+r.title+r.segment).toLowerCase().includes(q)))return false;
     return true;
-  });
-  shown.forEach(r=>{
-    const st=stageOf(r.id);
-    const opts=STAGES.map(s=>`<option ${s===st?"selected":""}>${s}</option>`).join("");
-    const li=r.linkedin?`<a href="${r.linkedin}" target="_blank">Profile ↗</a>`:'<span class="muted">—</span>';
-    const em=r.email?`<span class="email" title="Guess — verify. Click to copy" onclick="navigator.clipboard.writeText('${r.email}')">${r.email}</span>`:'<span class="muted">—</span>';
+  }).forEach(r=>{
+    const st=r.stage||"Not started";
+    const li=r.linkedin?`<a href="${esc(r.linkedin)}" target="_blank">Profile ↗</a>`:'<span class="muted">—</span>';
+    const em=r.email?`<span class="email">${esc(r.email)}</span>`:'<span class="muted">—</span>';
     const poc=r.poc?esc(r.poc):'<span class="muted">find POC</span>';
     body.insertAdjacentHTML("beforeend",`<tr>
       <td><b>${esc(r.company)}</b></td>
@@ -149,53 +178,47 @@ function render(){
       <td>${esc(r.hq)}</td><td>${esc(r.funding)}</td>
       <td>${poc}</td><td>${esc(r.title)}</td><td>${esc(r.loc)||'—'}</td>
       <td>${li}</td><td>${em}</td>
-      <td class="pri ${r.priority}">${r.priority||''}</td>
-      <td><select class="stage" style="background:${STAGE_COLOR[st]}" onchange="saveStage(${r.id},this.value)">${opts}</select></td>
+      <td class="pri ${esc(r.priority)}">${esc(r.priority)}</td>
+      <td><span class="badge" style="background:${STAGE_COLOR[st]||'#e6e9ee'}">${esc(st)}</span></td>
     </tr>`);
   });
   renderCards();
 }
 function renderCards(){
-  const counts={};STAGES.forEach(s=>counts[s]=0);
-  rows.forEach(r=>counts[stageOf(r.id)]++);
+  const c=s=>rows.filter(r=>(r.stage||"Not started")===s).length;
   const companies=new Set(rows.map(r=>r.company)).size;
   const pocs=rows.filter(r=>r.linkedin).length;
-  const active=rows.length-counts["Not started"];
-  const cards=[["Companies",companies],["POCs identified",pocs],["Reached out",active],
-    ["Reverts",counts["Revert received"]],["Meetings",counts["Meeting scheduled"]],["Won",counts["Won"]]];
-  document.getElementById("cards").innerHTML=cards.map(c=>`<div class="card"><div class="n">${c[1]}</div><div class="l">${c[0]}</div></div>`).join("");
+  const reached=rows.filter(r=>{const s=r.stage||"Not started";return s!=="Not started"&&s!=="";}).length;
+  const cards=[["Companies",companies],["POCs identified",pocs],["Reached out",reached],
+    ["Reverts",c("Revert received")],["Meetings",c("Meeting scheduled")],["Won",c("Won")]];
+  document.getElementById("cards").innerHTML=cards.map(x=>`<div class="card"><div class="n">${x[1]}</div><div class="l">${x[0]}</div></div>`).join("");
 }
-function resetAll(){if(confirm("Clear all saved statuses?")){localStorage.removeItem("even_stage");for(const k in store)delete store[k];render();}}
-[search,fSeg,fPri,fStage].forEach(el=>el.addEventListener("input",render));
-
+function setUpdated(live){
+  const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"numeric",minute:"2-digit",hour12:true}).formatToParts(new Date());
+  const o={};p.forEach(x=>o[x.type]=x.value);
+  const t=o.weekday+", "+o.day+" "+o.month+" "+o.year+", "+o.hour+":"+o.minute+" "+((o.dayPeriod||"").toUpperCase())+" IST";
+  const el=document.getElementById("lastUpdated");
+  el.innerHTML=live?'<span class="dot">●</span> Live from Google Sheet · synced '+t
+    :'<span class="dot" style="color:#ffd479">●</span> Saved snapshot (live sync unavailable) · '+t;
+}
 document.getElementById("templates").innerHTML=TEMPLATES.map((t,i)=>`
   <details ${i===0?"open":""}><summary>${t[0]}</summary>
   <pre id="tpl${i}">${esc(t[1])}</pre>
   <button class="copy" onclick="navigator.clipboard.writeText(document.getElementById('tpl${i}').innerText)">Copy</button>
   </details>`).join("");
-
-render();
-
-// Show "Last updated" in IST, advancing at the 10:00 / 14:00 / 18:00 IST refresh slots
-(function(){
-  const slots=[{h:10,label:"10:00 AM"},{h:14,label:"2:00 PM"},{h:18,label:"6:00 PM"}];
-  function istParts(d){
-    const p=new Intl.DateTimeFormat("en-GB",{timeZone:"Asia/Kolkata",weekday:"short",day:"numeric",month:"short",year:"numeric",hour:"2-digit",hour12:false}).formatToParts(d);
-    const o={};p.forEach(x=>o[x.type]=x.value);return o;
+[search,fSeg,fPri,fStage].forEach(el=>el.addEventListener("input",render));
+async function load(){
+  try{
+    const r=await fetch(CSV_URL,{cache:"no-store"});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const parsed=rowsFromCSV(await r.text());
+    if(!parsed.length)throw new Error("empty");
+    rows=parsed;populateFilters();render();setUpdated(true);
+  }catch(e){
+    rows=fallbackRows();populateFilters();render();setUpdated(false);
   }
-  const now=new Date();
-  const o=istParts(now);
-  const hour=parseInt(o.hour,10);
-  let chosen=null;
-  for(const s of slots){ if(hour>=s.h) chosen=s; }
-  let dateStr=o.weekday+", "+o.day+" "+o.month+" "+o.year;
-  if(!chosen){ // before 10:00 IST -> previous day's 6 PM slot
-    chosen=slots[2];
-    const y=istParts(new Date(now.getTime()-24*60*60*1000));
-    dateStr=y.weekday+", "+y.day+" "+y.month+" "+y.year;
-  }
-  document.getElementById("lastUpdated").innerHTML='<span class="dot">●</span> Last updated: '+dateStr+", "+chosen.label+" IST";
-})();
+}
+load();
 </script>
 </body>
 </html>
